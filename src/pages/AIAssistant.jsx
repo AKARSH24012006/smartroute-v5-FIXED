@@ -5,8 +5,8 @@ const STARTERS = [
   "Plan a 3-day trip to Goa within ₹15,000",
   "Find budget hotels in Shillong under ₹2,000",
   "What should I pack for Munnar hills?",
-  "Best time to visit Hampi Ruins",
-  "Emergency options for delayed flights",
+  "Best places to eat near SRM Kattankulathur",
+  "Budget trip from SRM to Pondicherry in a weekend",
 ];
 
 const AGENTS = [
@@ -36,15 +36,43 @@ function TypingDots() {
 export default function AIAssistant({ tripCtx, addToast }) {
   const [messages, setMessages] = useState([{
     id: "welcome", role: "assistant",
-    content: `Hi! I'm your SmartRoute AI — powered by multi-agent intelligence. I can plan trips, find hotels & flights, analyze budgets, suggest packing lists, and handle emergencies. Where would you like to go?`,
+    content: `Hi! I'm your SmartRoute AI — powered by multi-agent intelligence. I can plan trips, find hotels & flights, analyze budgets, suggest packing lists, and handle emergencies. Ask me anything, or try voice input!`,
     quickActions: STARTERS.slice(0, 3),
   }]);
-  const [draft, setDraft]     = useState("");
-  const [sending, setSending] = useState(false);
-  const [riskScore, setRisk]  = useState(null);
-  const bottomRef             = useRef(null);
+  const [draft, setDraft]       = useState("");
+  const [sending, setSending]   = useState(false);
+  const [riskScore, setRisk]    = useState(null);
+  const [listening, setListening] = useState(false);
+  const [voiceSupported]        = useState(() => "SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+  const bottomRef               = useRef(null);
+  const recognitionRef          = useRef(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  /* ── Voice input (Web Speech API) ── */
+  const startVoice = () => {
+    if (!voiceSupported) { addToast("Voice not supported in this browser. Use Chrome.", "error"); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.lang = "en-IN";
+    rec.continuous = false;
+    rec.interimResults = false;
+    recognitionRef.current = rec;
+    rec.onstart  = () => setListening(true);
+    rec.onend    = () => setListening(false);
+    rec.onerror  = () => { setListening(false); addToast("Voice error. Try again.", "error"); };
+    rec.onresult = (e) => {
+      const transcript = e.results[0][0].transcript.trim();
+      if (transcript) {
+        setDraft(transcript);
+        // Auto-send after short delay
+        setTimeout(() => send(transcript), 300);
+      }
+    };
+    try { rec.start(); } catch { addToast("Could not start voice.", "error"); setListening(false); }
+  };
+
+  const stopVoice = () => { recognitionRef.current?.stop(); setListening(false); };
 
   useEffect(() => {
     const fetchRisk = async () => {
@@ -152,6 +180,34 @@ export default function AIAssistant({ tripCtx, addToast }) {
               placeholder="Ask anything about your trip — plans, hotels, packing, emergencies..."
               value={draft} onChange={e => setDraft(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}/>
+
+            {/* Voice input button */}
+            {voiceSupported && (
+              <button
+                onClick={listening ? stopVoice : startVoice}
+                title={listening ? "Stop listening" : "Voice input"}
+                style={{
+                  width: 42, height: 42, padding: 0, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  border: `1.5px solid ${listening ? "var(--red)" : "var(--border)"}`,
+                  borderRadius: "var(--r-md)",
+                  background: listening ? "rgba(220,38,38,0.08)" : "var(--bg-soft)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                  animation: listening ? "pulse-mic 1s ease-in-out infinite" : "none",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={listening ? "var(--red)" : "none"}
+                  stroke={listening ? "var(--red)" : "var(--text-2)"} strokeWidth="2"
+                  strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/>
+                  <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              </button>
+            )}
+
             <button className="btn btn-primary" style={{ width: 42, height: 42, padding: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
               onClick={() => send()} disabled={sending || !draft.trim()}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -160,6 +216,19 @@ export default function AIAssistant({ tripCtx, addToast }) {
               </svg>
             </button>
           </div>
+          {listening && (
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }}
+              style={{ textAlign:"center", fontSize:12.5, color:"var(--red)", marginTop:6,
+                display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+              <span style={{ width:8, height:8, borderRadius:"50%", background:"var(--red)", display:"inline-block",
+                animation:"pulse-dot 0.8s ease-in-out infinite" }} />
+              Listening... speak now
+            </motion.div>
+          )}
+          <style>{`
+            @keyframes pulse-mic { 0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,0.3)} 50%{box-shadow:0 0 0 6px rgba(220,38,38,0)} }
+            @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
+          `}</style>
         </div>
 
         {/* Right panel */}

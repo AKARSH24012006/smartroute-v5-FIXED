@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import CrowdAnalyzer from "../components/CrowdAnalyzer.jsx";
 import LanguageTips from "../components/LanguageTips.jsx";
@@ -20,11 +20,22 @@ const STOP_COLORS = {
 };
 
 export default function Itinerary({ tripCtx, addToast }) {
-  const [form, setForm]         = useState({ ...tripCtx });
-  const [itinerary, setItin]    = useState(null);
-  const [loading, setLoading]   = useState(false);
+  const [form, setForm]           = useState({ ...tripCtx });
+  const [itinerary, setItin]      = useState(null);
+  const [loading, setLoading]     = useState(false);
   const [activeDay, setActiveDay] = useState(1);
   const [activeTab, setActiveTab] = useState("plan");
+
+  /* Sync form when tripCtx destination/budget/days changes (Dashboard → Itinerary) */
+  useEffect(() => {
+    setForm(f => ({
+      ...f,
+      destination: tripCtx.destination || f.destination,
+      budget:      tripCtx.budget      || f.budget,
+      days:        tripCtx.days        || f.days,
+      origin:      tripCtx.origin      || f.origin,
+    }));
+  }, [tripCtx.destination, tripCtx.budget, tripCtx.days, tripCtx.origin]);
 
   const generate = async () => {
     setLoading(true);

@@ -6,106 +6,109 @@ import { motion } from "framer-motion";
    Detection: city name → state → language(s)
    ══════════════════════════════════════════════════════════ */
 
-/* Map keywords → language key */
+/* Map keywords → language key (no duplicate keys) */
 const KEYWORD_TO_LANG = {
-  // Tamil Nadu (Tamil)
-  ooty:"tamil", kodaikanal:"tamil", coorg:"kannada",
-  chennai:"tamil", madurai:"tamil", coimbatore:"tamil", trichy:"tamil",
-  tiruchirappalli:"tamil", salem:"tamil", tirunelveli:"tamil", vellore:"tamil",
-  erode:"tamil", thoothukudi:"tamil", ooty:"tamil", kodaikanal:"tamil",
-  kanchipuram:"tamil", pondicherry:"tamil", puducherry:"tamil", thanjavur:"tamil",
-  cuddalore:"tamil", nagapattinam:"tamil", karur:"tamil", dindigul:"tamil",
+  // ─ Tamil Nadu + SRM campus (Tamil) ─
+  "srm university":"tamil", "tamil nadu":"tamil", "south india":"tamil",
+  "new delhi":"hindi_delhi",
+  kattankulathur:"tamil", tiruchirappalli:"tamil", tirunelveli:"tamil",
+  thoothukudi:"tamil", nagapattinam:"tamil", cuddalore:"tamil",
+  kanchipuram:"tamil", puducherry:"tamil", pondicherry:"tamil",
+  thanjavur:"tamil", dindigul:"tamil", kodaikanal:"tamil",
+  coimbatore:"tamil", madurai:"tamil", vellore:"tamil", salem:"tamil",
+  karur:"tamil", erode:"tamil", ooty:"tamil", chennai:"tamil",
+  potheri:"tamil", srmist:"tamil", tamilnadu:"tamil",
+  srm:"tamil", tamil:"tamil",
 
-  // Kerala (Malayalam)
-  munnar:"malayalam", varkala:"malayalam", kovalam:"malayalam", alleppey:"malayalam",
-  kochi:"malayalam", thiruvananthapuram:"malayalam", trivandrum:"malayalam",
-  kozhikode:"malayalam", calicut:"malayalam", thrissur:"malayalam",
-  kollam:"malayalam", kannur:"malayalam", palakkad:"malayalam",
-  munnar:"malayalam", alleppey:"malayalam", alappuzha:"malayalam",
-  wayanad:"malayalam", idukki:"malayalam", kottayam:"malayalam",
+  // ─ Kerala (Malayalam) ─
+  thiruvananthapuram:"malayalam", trivandrum:"malayalam",
+  kozhikode:"malayalam", alappuzha:"malayalam", alleppey:"malayalam",
+  kottayam:"malayalam", wayanad:"malayalam", palakkad:"malayalam",
+  thrissur:"malayalam", calicut:"malayalam", kannur:"malayalam",
+  kollam:"malayalam", idukki:"malayalam", kovalam:"malayalam",
+  varkala:"malayalam", munnar:"malayalam", kochi:"malayalam",
 
-  // Karnataka (Kannada)
-  bangalore:"kannada", bengaluru:"kannada", mysore:"kannada", mysuru:"kannada",
-  hubli:"kannada", dharwad:"kannada", mangalore:"kannada", belgaum:"kannada",
-  hampi:"kannada", badami:"kannada", udupi:"kannada", gulbarga:"kannada",
-  hassan:"kannada", shimoga:"kannada", tumkur:"kannada",
+  // ─ Karnataka (Kannada) ─
+  bengaluru:"kannada", bangalore:"kannada", mysuru:"kannada", mysore:"kannada",
+  mangalore:"kannada", belgaum:"kannada", dharwad:"kannada", gulbarga:"kannada",
+  shimoga:"kannada", tumkur:"kannada", hassan:"kannada", udupi:"kannada",
+  badami:"kannada", hampi:"kannada", hubli:"kannada",
 
-  // Andhra Pradesh & Telangana (Telugu)
-  hyderabad:"telugu", visakhapatnam:"telugu", vizag:"telugu",
-  vijayawada:"telugu", guntur:"telugu", tirupati:"telugu",
-  nellore:"telugu", kurnool:"telugu", rajahmundry:"telugu",
-  warangal:"telugu", karimnagar:"telugu", nizamabad:"telugu",
+  // ─ Andhra + Telangana (Telugu) ─
+  visakhapatnam:"telugu", vijayawada:"telugu", rajahmundry:"telugu",
+  karimnagar:"telugu", nizamabad:"telugu", warangal:"telugu",
+  tirupati:"telugu", nellore:"telugu", kurnool:"telugu",
+  guntur:"telugu", hyderabad:"telugu", vizag:"telugu",
 
-  // West Bengal (Bengali)
-  kolkata:"bengali", calcutta:"bengali", darjeeling:"bengali",
-  siliguri:"bengali", durgapur:"bengali", asansol:"bengali",
+  // ─ West Bengal (Bengali) ─
+  murshidabad:"bengali", darjeeling:"bengali", calcutta:"bengali",
+  kolkata:"bengali", siliguri:"bengali", durgapur:"bengali",
+  asansol:"bengali", bankura:"bengali", purulia:"bengali",
   howrah:"bengali", burdwan:"bengali", malda:"bengali",
-  murshidabad:"bengali", bankura:"bengali", purulia:"bengali",
+  andaman:"bengali",
 
-  // Maharashtra (Marathi)
-  mumbai:"marathi", pune:"marathi", nagpur:"marathi", nashik:"marathi",
-  aurangabad:"marathi", solapur:"marathi", kolhapur:"marathi",
-  thane:"marathi", navi:"marathi", lonavala:"marathi", mahabaleshwar:"marathi",
-  shirdi:"marathi", ajanta:"marathi", ellora:"marathi",
+  // ─ Maharashtra (Marathi) ─
+  mahabaleshwar:"marathi", aurangabad:"marathi", kolhapur:"marathi",
+  solapur:"marathi", lonavala:"marathi", nagpur:"marathi",
+  nashik:"marathi", thane:"marathi", shirdi:"marathi",
+  ajanta:"marathi", ellora:"marathi", mumbai:"marathi",
+  pune:"marathi", navi:"marathi",
 
-  // Gujarat (Gujarati)
-  ahmedabad:"gujarati", surat:"gujarati", vadodara:"gujarati", baroda:"gujarati",
-  rajkot:"gujarati", gandhinagar:"gujarati", bhavnagar:"gujarati",
-  junagadh:"gujarati", jamnagar:"gujarati", rann:"gujarati", kutch:"gujarati",
+  // ─ Gujarat (Gujarati) ─
+  gandhinagar:"gujarati", bhavnagar:"gujarati", ahmedabad:"gujarati",
+  vadodara:"gujarati", baroda:"gujarati", rajkot:"gujarati",
+  jamnagar:"gujarati", junagadh:"gujarati", surat:"gujarati",
+  rann:"gujarati", kutch:"gujarati",
 
-  // Rajasthan (Rajasthani/Hindi)
-  jaipur:"rajasthani", jodhpur:"rajasthani", udaipur:"rajasthani",
-  jaisalmer:"rajasthani", bikaner:"rajasthani", pushkar:"rajasthani",
-  ajmer:"rajasthani", chittorgarh:"rajasthani", mount:"rajasthani",
+  // ─ Rajasthan (Rajasthani) ─
+  chittorgarh:"rajasthani", jaisalmer:"rajasthani", jodhpur:"rajasthani",
+  udaipur:"rajasthani", bikaner:"rajasthani", pushkar:"rajasthani",
+  ajmer:"rajasthani", jaipur:"rajasthani", mount:"rajasthani",
 
-  // Uttar Pradesh (Hindi)
-  agra:"hindi_up", varanasi:"hindi_up", lucknow:"hindi_up",
-  allahabad:"hindi_up", prayagraj:"hindi_up", kanpur:"hindi_up",
-  mathura:"hindi_up", vrindavan:"hindi_up", ayodhya:"hindi_up",
-  gorakhpur:"hindi_up", meerut:"hindi_up",
+  // ─ Uttar Pradesh (Hindi) ─
+  prayagraj:"hindi_up", allahabad:"hindi_up", vrindavan:"hindi_up",
+  mathura:"hindi_up", varanasi:"hindi_up", gorakhpur:"hindi_up",
+  lucknow:"hindi_up", ayodhya:"hindi_up", kanpur:"hindi_up",
+  meerut:"hindi_up", agra:"hindi_up",
 
-  // Uttarakhand (Hindi/Garhwali)
-  rishikesh:"garhwali", haridwar:"garhwali", dehradun:"garhwali",
-  mussoorie:"garhwali", nainital:"garhwali", auli:"garhwali",
+  // ─ Uttarakhand (Garhwali) ─
+  mussoorie:"garhwali", rishikesh:"garhwali", haridwar:"garhwali",
+  dehradun:"garhwali", nainital:"garhwali", auli:"garhwali",
 
-  // Himachal Pradesh (Hindi/Pahari)
-  shimla:"pahari", manali:"pahari", dharamshala:"pahari",
+  // ─ Himachal Pradesh (Pahari) ─
+  dharamshala:"pahari", shimla:"pahari", manali:"pahari",
   mcleod:"pahari", kullu:"pahari", spiti:"pahari", kinnaur:"pahari",
 
-  // Delhi (Hindi)
-  delhi:"hindi_delhi", "new delhi":"hindi_delhi", noida:"hindi_delhi", gurgaon:"hindi_delhi",
+  // ─ Delhi (Hindi) ─
+  gurgaon:"hindi_delhi", noida:"hindi_delhi", delhi:"hindi_delhi",
 
-  // Goa (Konkani)
-  goa:"konkani", panaji:"konkani", margao:"konkani", vasco:"konkani",
+  // ─ Goa (Konkani) ─
+  panaji:"konkani", margao:"konkani", vasco:"konkani", goa:"konkani",
 
-  // Punjab (Punjabi)
+  // ─ Punjab (Punjabi) ─
   amritsar:"punjabi", ludhiana:"punjabi", chandigarh:"punjabi",
   jalandhar:"punjabi", patiala:"punjabi", golden:"punjabi",
 
-  // Northeast (various)
+  // ─ Northeast ─
   shillong:"khasi", guwahati:"assamese", dispur:"assamese",
+  kaziranga:"assamese", majuli:"assamese", jorhat:"assamese",
   imphal:"manipuri", kohima:"nagamese", aizawl:"mizo",
   gangtok:"nepali", itanagar:"hindi_ne",
 
-  // Jammu & Kashmir
-  srinagar:"kashmiri", jammu:"kashmiri", leh:"ladakhi", ladakh:"ladakhi",
+  // ─ J&K / Ladakh ─
+  srinagar:"kashmiri", ladakh:"ladakhi", jammu:"kashmiri", leh:"ladakhi",
 
-  // Odisha (Odia)
-  bhubaneswar:"odia", puri:"odia", cuttack:"odia", konark:"odia",
+  // ─ Odisha ─
+  bhubaneswar:"odia", konark:"odia", cuttack:"odia", puri:"odia",
 
-  // Madhya Pradesh (Hindi)
-  bhopal:"hindi_mp", indore:"hindi_mp", gwalior:"hindi_mp",
-  jabalpur:"hindi_mp", khajuraho:"hindi_mp", ujjain:"hindi_mp",
+  // ─ Madhya Pradesh ─
+  khajuraho:"hindi_mp", jabalpur:"hindi_mp", gwalior:"hindi_mp",
+  indore:"hindi_mp", bhopal:"hindi_mp", ujjain:"hindi_mp",
 
-  // Bihar (Bhojpuri/Hindi)
-  patna:"bhojpuri", bodh:"bhojpuri", gaya:"bhojpuri",
-
-  // Assam
-  kaziranga:"assamese", majuli:"assamese", jorhat:"assamese",
-
-  // Generic beach/hill
-  varkala:"malayalam", kovalam:"malayalam", andaman:"bengali",
+  // ─ Bihar ─
+  patna:"bhojpuri", gaya:"bhojpuri", bodh:"bhojpuri",
 };
+
 
 const LANG_DATA = {
   tamil: {
@@ -465,8 +468,10 @@ const FALLBACK = {
 function detectLanguage(destination) {
   if (!destination) return FALLBACK;
   const lower = destination.toLowerCase().trim();
-  // Check against all keywords
-  for (const [keyword, langKey] of Object.entries(KEYWORD_TO_LANG)) {
+
+  // Sort keywords by length descending — match longest first for accuracy
+  const sorted = Object.entries(KEYWORD_TO_LANG).sort((a, b) => b[0].length - a[0].length);
+  for (const [keyword, langKey] of sorted) {
     if (lower.includes(keyword)) {
       return LANG_DATA[langKey] || FALLBACK;
     }

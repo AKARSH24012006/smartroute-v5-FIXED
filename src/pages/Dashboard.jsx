@@ -4,6 +4,11 @@ import { useNavigate } from "react-router-dom";
 import useAgentStream from "../hooks/useAgentStream.js";
 import ExplainPanel from "../components/ExplainPanel.jsx";
 import PayButton from "../components/PayButton.jsx";
+import useLocation from "../hooks/useLocation.js";
+import useWeatherAlerts from "../hooks/useWeatherAlerts.js";
+import useDestinationImages from "../hooks/useDestinationImages.js";
+import WeatherAlertBanner from "../components/WeatherAlertBanner.jsx";
+import MoodSelector from "../components/MoodSelector.jsx";
 
 /* ── Real booking URL builders ── */
 const BOOK = {
@@ -138,13 +143,41 @@ function LiveMap({ destination, origin }) {
   );
 }
 
-/* ── Curated destinations ── */
+/* ── Curated destinations (images loaded dynamically) ── */
 const CURATED = [
-  { name:"Varkala Beach",  location:"South India",  tag:"trending",  tagLabel:"Trending",  price:"₹12,000 avg", img:"https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400&q=75" },
-  { name:"Munnar Hills",   location:"Hill Station", tag:"low-crowd", tagLabel:"Low Crowd", price:"₹8,500 avg",  img:"https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=400&q=75" },
-  { name:"Hampi Ruins",    location:"Karnataka",   tag:"cultural",  tagLabel:"Cultural",  price:"₹6,200 avg",  img:"https://images.unsplash.com/photo-1544036799-f68eba81e0f8?w=400&q=75" },
-  { name:"Pondicherry",    location:"Relaxation",  tag:"relax",     tagLabel:"Relax",     price:"₹15,000 avg", img:"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=75" },
+  { name:"SRM University",  location:"Kattankulathur, TN", tag:"campus",    tagLabel:"Campus",    price:"30 places", img:"https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400&q=75" },
+  { name:"Varkala Beach",   location:"South India",         tag:"trending",  tagLabel:"Trending",  price:"₹12,000 avg", img:"https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400&q=75" },
+  { name:"Munnar Hills",    location:"Hill Station",        tag:"low-crowd", tagLabel:"Low Crowd", price:"₹8,500 avg",  img:"https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=400&q=75" },
+  { name:"Hampi Ruins",     location:"Karnataka",           tag:"cultural",  tagLabel:"Cultural",  price:"₹6,200 avg",  img:"https://images.unsplash.com/photo-1544036799-f68eba81e0f8?w=400&q=75" },
+  { name:"Pondicherry",     location:"Relaxation",          tag:"relax",     tagLabel:"Relax",     price:"₹15,000 avg", img:"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=75" },
 ];
+
+
+/* ── Dynamic destination card with real image ── */
+function DestCard({ dest, onClick }) {
+  const { primaryUrl } = useDestinationImages(dest.name === "SRM University" ? "university campus" : dest.name, "travel", 1);
+  const isSRM = dest.tag === "campus";
+  return (
+    <motion.div className="dest-card" whileHover={{ y:-4, transition:{duration:0.18} }} onClick={onClick}
+      style={isSRM ? { border:"1.5px solid rgba(124,58,237,.35)", boxShadow:"0 4px 20px rgba(124,58,237,.12)" } : {}}>
+      <img className="dest-card-img" src={primaryUrl || dest.img} alt={dest.name} loading="lazy" />
+      <div className="dest-card-overlay" />
+      <div className={`dest-card-tag tag-${dest.tag}`}
+        style={isSRM ? { background:"rgba(124,58,237,.9)", color:"#fff" } : {}}>{dest.tagLabel}</div>
+      <div className="dest-card-content">
+        <div className="dest-location">{dest.location}</div>
+        <div className="dest-name">{dest.name}</div>
+        <div className="dest-price">
+          {isSRM
+            ? <span style={{color:"#c4b5fd"}}>🎓 {dest.price}</span>
+            : <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>{dest.price}</>
+          }
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 
 const STAGGER = { visible: { transition: { staggerChildren: 0.06 } } };
 const FU = { hidden: { opacity:0, y:16 }, visible: { opacity:1, y:0, transition:{ duration:0.35, ease:"easeOut" } } };
@@ -175,6 +208,25 @@ export default function Dashboard({ tripCtx, setTripCtx, addToast }) {
   const [activeTab, setActiveTab]   = useState("flights"); // flights | hotels | train | cab
   const navigate = useNavigate();
   const { connected, agentEvents }  = useAgentStream();
+
+  /* ── Real-time hooks ── */
+  const { location, loading: locLoading, detect: detectLocation } = useLocation();
+  const { alerts: weatherAlerts } = useWeatherAlerts(tripCtx.destination, tripCtx.days);
+  const { primaryUrl: heroImageUrl } = useDestinationImages(tripCtx.destination, "travel landscape", 1);
+
+  /* Auto-fill origin from GPS when detected */
+  useEffect(() => {
+    if (location?.city && location.source !== "default") {
+      const autoOrigin = location.region
+        ? `${location.city}, ${location.region}`
+        : location.city;
+      // Only update if origin still has the default SRM value
+      if (tripCtx.origin?.includes("Maraimalai") || !tripCtx.origin?.trim()) {
+        setTripCtx(c => ({ ...c, origin: autoOrigin }));
+        addToast(`📍 Location detected: ${location.city}`, "success");
+      }
+    }
+  }, [location]); // eslint-disable-line
 
   useEffect(() => { setSearchDest(tripCtx.destination); }, [tripCtx.destination]);
 
@@ -385,13 +437,31 @@ export default function Dashboard({ tripCtx, setTripCtx, addToast }) {
                 </div>
               ) : (
                 <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  {hotels.slice(0,5).map((h,i) => (
+                  {hotels.slice(0,5).map((h,i) => {
+                    const hotelImgs = [
+                      "photo-1566073771259-6a8506099945",
+                      "photo-1582719508461-905c673771fd",
+                      "photo-1571003123894-1f0594d2b5d9",
+                      "photo-1551882547-ff40c63fe2fa",
+                      "photo-1540541338537-71e2c2a89289",
+                    ];
+                    const imgId = hotelImgs[i % hotelImgs.length];
+                    const city  = encodeURIComponent(tripCtx.destination || "");
+                    const bookLinks = [
+                      { label:"MakeMyTrip", url: `https://www.makemytrip.com/hotels/${city}.html`, color:"#e74c3c" },
+                      { label:"OYO",        url: `https://www.oyorooms.com/search?location=${city}`, color:"#e74c3c" },
+                      { label:"Booking",    url: `https://www.booking.com/search.html?ss=${city}&dest_type=city`, color:"#003580" },
+                    ];
+                    return (
                     <motion.div key={i} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{delay:i*0.06}}
                       style={{ background:"var(--bg-soft)", border:"1.5px solid var(--border)", borderRadius:"var(--r-lg)", padding:"12px 14px", display:"flex", alignItems:"center", gap:13, transition:"all 0.15s" }}
                       whileHover={{ borderColor:"var(--blue-border)", background:"white" }}>
-                      <div style={{ width:56, height:56, borderRadius:"var(--r-md)", background:"linear-gradient(135deg,#dbeafe,#ede9fe)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:22 }}>
-                        🏨
-                      </div>
+                      <img
+                        src={`https://images.unsplash.com/${imgId}?w=80&h=80&q=75&fit=crop`}
+                        alt={h.name}
+                        style={{ width:56, height:56, borderRadius:"var(--r-md)", objectFit:"cover", flexShrink:0 }}
+                        onError={e => { e.target.style.display="none"; }}
+                      />
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:600, fontSize:14, color:"var(--text)" }}>{h.name}</div>
                         <div style={{ fontSize:12, color:"var(--text-2)", marginTop:2 }}>{h.distanceFromCenter} from centre · {h.cancellationPolicy}</div>
@@ -406,14 +476,20 @@ export default function Dashboard({ tripCtx, setTripCtx, addToast }) {
                         <div style={{ fontFamily:"'Sora',sans-serif", fontSize:18, fontWeight:800, color:"var(--text)" }}>
                           {h.priceFormatted||fmt(h.pricePerNight)}
                         </div>
-                        <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:7 }}>per night</div>
-                        <a href={h.bookingUrl||BOOK.hotel(tripCtx.destination)} target="_blank" rel="noopener noreferrer"
-                          className="btn btn-sm" style={{ background:"linear-gradient(135deg,#16a34a,#0d9488)", color:"#fff", textDecoration:"none", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
-                          Reserve →
-                        </a>
+                        <div style={{ fontSize:11, color:"var(--text-3)", marginBottom:6 }}>per night</div>
+                        <div style={{ display:"flex", gap:5, justifyContent:"flex-end", flexWrap:"wrap" }}>
+                          {bookLinks.map(bl => (
+                            <a key={bl.label} href={bl.url} target="_blank" rel="noopener noreferrer"
+                              style={{ fontSize:10.5, padding:"3px 8px", borderRadius:"var(--r-full)",
+                                background:"var(--blue-dim)", color:"var(--blue)", textDecoration:"none", fontWeight:600 }}>
+                              {bl.label}
+                            </a>
+                          ))}
+                        </div>
                       </div>
                     </motion.div>
-                  ))}
+                    );
+                  })}
                   <div style={{ textAlign:"center", marginTop:6 }}>
                     <a href={BOOK.hotel(tripCtx.destination)} target="_blank" rel="noopener noreferrer"
                       style={{ fontSize:13, color:"var(--blue)", textDecoration:"none", fontWeight:600 }}>
@@ -479,15 +555,35 @@ export default function Dashboard({ tripCtx, setTripCtx, addToast }) {
   return (
     <motion.div initial="hidden" animate="visible" variants={STAGGER}>
 
+      {/* ── Weather Alert Banner ── */}
+      <AnimatePresence>
+        {weatherAlerts.length > 0 && (
+          <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }} style={{ marginBottom:12 }}>
+            <WeatherAlertBanner alerts={weatherAlerts} destination={tripCtx.destination} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Hero banner — matches reference exactly ── */}
       <motion.div className="dash-hero" variants={FU}>
-        <img className="dash-hero-img" src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=60" alt="" />
+        <img
+          className="dash-hero-img"
+          src={heroImageUrl || "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=60"}
+          alt={tripCtx.destination}
+          style={{ transition: "opacity 0.5s" }}
+        />
         <div className="dash-hero-overlay" />
         <div className="dash-hero-content">
           <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)", marginBottom:8 }}>
             AI-POWERED TRAVEL PLANNING
           </div>
           <h1>Plan Smarter. <span>Travel</span><br/>Better.</h1>
+
+          {/* Mood Selector — above search */}
+          <div style={{ marginBottom:12 }}>
+            <MoodSelector tripCtx={tripCtx} setTripCtx={setTripCtx} />
+          </div>
+
           <form className="hero-search-row" onSubmit={handleSearch}>
             <div className="hero-search-wrap">
               <svg className="hero-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -497,6 +593,18 @@ export default function Dashboard({ tripCtx, setTripCtx, addToast }) {
               Generate Smart Trip
             </button>
           </form>
+
+          {/* Location detection status */}
+          {locLoading && (
+            <div style={{ fontSize:11.5, color:"rgba(255,255,255,0.6)", marginTop:8, display:"flex", alignItems:"center", gap:5 }}>
+              <span style={{ animation:"spin360 1s linear infinite", display:"inline-block" }}>⟳</span> Detecting your location...
+            </div>
+          )}
+          {location && !locLoading && location.source !== "default" && (
+            <div style={{ fontSize:11.5, color:"rgba(255,255,255,0.6)", marginTop:8 }}>
+              📍 {location.city}, {location.region}
+            </div>
+          )}
         </div>
       </motion.div>
 
@@ -633,20 +741,11 @@ export default function Dashboard({ tripCtx, setTripCtx, addToast }) {
         </div>
         <div className="curated-grid">
           {CURATED.map(dest => (
-            <motion.div key={dest.name} className="dest-card" whileHover={{ y:-4, transition:{duration:0.18} }}
-              onClick={() => { setTripCtx(c=>({...c,destination:dest.name})); addToast(`Destination: ${dest.name}`,"success"); }}>
-              <img className="dest-card-img" src={dest.img} alt={dest.name} loading="lazy" />
-              <div className="dest-card-overlay" />
-              <div className={`dest-card-tag tag-${dest.tag}`}>{dest.tagLabel}</div>
-              <div className="dest-card-content">
-                <div className="dest-location">{dest.location}</div>
-                <div className="dest-name">{dest.name}</div>
-                <div className="dest-price">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                  {dest.price}
-                </div>
-              </div>
-            </motion.div>
+            <DestCard
+              key={dest.name}
+              dest={dest}
+              onClick={() => { setTripCtx(c=>({...c,destination:dest.name})); addToast(`Destination: ${dest.name}`,"success"); }}
+            />
           ))}
         </div>
       </motion.div>

@@ -52,6 +52,8 @@ import cache from "./lib/cache.js";
 import {
   handleCreateCheckout, handleGetSession, handleWebhook
 } from "./lib/payments.js";
+import { searchSRMPlaces, isSRMQuery, SRM_PLACES } from "./lib/srmdata.js";
+import { searchImages, getDestinationHeroImage, getCuratedImage } from "./lib/images.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -330,11 +332,37 @@ app.post("/api/activities/search", async (req, res) => {
   const activities = await cache.getOrSet(cacheKey, () => fetchActivities(lat, lon), 1800);
 
   if (!activities?.length) {
-    const fallback = ["Heritage Walk","Local Market","Scenic Viewpoint","Museum","Public Park","Temple or Shrine"]
-      .map((name,i) => ({ id:`f${i}`, name:`${destination} ${name}`, kinds:"cultural, local", distance:`${(i+1)*0.8} km`, rating: 4+Math.random()*0.9 }));
+    const placeTypes = [
+      { name:"Heritage Walk",   kinds:"cultural, historic",  img:"photo-1524492412937-b28074a5d7da", icon:"🏛" },
+      { name:"Local Market",    kinds:"shopping, local",     img:"photo-1555529669-e69e7aa0ba9a", icon:"🛒" },
+      { name:"Scenic Viewpoint",kinds:"natural, viewpoint",  img:"photo-1506905925346-21bda4d32df4", icon:"🌄" },
+      { name:"Museum",          kinds:"cultural, museum",    img:"photo-1464822759023-fed622ff2c3b", icon:"🖼" },
+      { name:"Public Park",     kinds:"nature, park",        img:"photo-1501854140801-50d01698950b", icon:"🌿" },
+      { name:"Temple or Shrine",kinds:"religious, cultural", img:"photo-1548013146-72479768bada", icon:"🛕" },
+    ];
+    const seed = Math.sin(lat * lon) * 10000;
+    const fallback = placeTypes.map((t, i) => ({
+      id: `f${i}`,
+      name: `${destination} ${t.name}`,
+      kinds: t.kinds,
+      distance: `${((i + 1) * 0.8).toFixed(1)} km`,
+      rating: parseFloat((4 + (seed % 0.9)).toFixed(1)),
+      icon: t.icon,
+      imageUrl: `https://images.unsplash.com/${t.img}?w=200&q=70`,
+      point: {
+        lat: lat + (i % 2 === 0 ? 1 : -1) * (0.003 + i * 0.002),
+        lon: lon + (i % 3 === 0 ? 1 : -1) * (0.002 + i * 0.003),
+      },
+    }));
     return res.json({ ok:true, activities:fallback, source:"curated" });
   }
-  res.json({ ok:true, activities, source:"opentripmap" });
+  // Normalize OpenTripMap results to same shape
+  const normalised = activities.map(a => ({
+    ...a,
+    point: a.point || (a.latitude && a.longitude ? { lat: a.latitude, lon: a.longitude } : null),
+  }));
+  res.json({ ok:true, activities:normalised, source:"opentripmap" });
+
 });
 
 /* ──────────────────────────────────────────────
@@ -730,6 +758,97 @@ app.post("/api/plan", rateLimit(60000, 10), async (req, res) => {
    ────────────────────────────────────────────── */
 app.get("/api/ws/status", (_req, res) => {
   res.json({ ok:true, connectedClients: clients.size });
+});
+
+/* ──────────────────────────────────────────────
+   LOCATION DETECT — IP-based geolocation
+   Falls back to ipapi.co (free, no key needed)
+   ────────────────────────────────────────────── */
+app.get("/api/location/detect", async (req, res) => {
+  const cacheKey = `location:detect:${req.ip}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return res.json({ ok: true, ...cached, fromCache: true });
+
+  try {
+    // Use ipapi.co — free tier: 1000 req/day, no key needed
+    const ipRes = await fetch("https://ipapi.co/json/", {
+      headers: { "User-Agent": "SmartRoute/2.0" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!ipRes.ok) throw new Error("ipapi failed");
+    const ip = await ipRes.json();
+    const result = {
+      city:     ip.city     || "Chennai",
+      region:   ip.region   || "Tamil Nadu",
+      country:  ip.country_name || "India",
+      lat:      ip.latitude  || 13.0827,
+      lon:      ip.longitude || 80.2707,
+      timezone: ip.timezone  || "Asia/Kolkata",
+      source:   "ipapi.co",
+    };
+    cache.set(cacheKey, result, 300); // cache 5 min
+    return res.json({ ok: true, ...result });
+  } catch {
+    // Graceful fallback — SRM Kattankulathur
+    return res.json({
+      ok: true,
+      city:    "Kattankulathur",
+      region:  "Tamil Nadu",
+      country: "India",
+      lat:     12.8231,
+      lon:     80.0444,
+      source:  "fallback",
+    });
+  }
+});
+
+/* ──────────────────────────────────────────────
+   IMAGES SEARCH — Unsplash → Pexels → curated
+   ────────────────────────────────────────────── */
+app.post("/api/images/search", async (req, res) => {
+  const { query, category, count = 4 } = req.body || {};
+  if (!query?.trim()) return res.status(400).json({ ok: false, error: "Query required." });
+
+  const cacheKey = `images:${query.toLowerCase()}:${category}:${count}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return res.json({ ok: true, ...cached, fromCache: true });
+
+  const result = await searchImages(query, category || "", Math.min(Number(count) || 4, 12));
+  cache.set(cacheKey, result, 1800); // 30 min cache
+  res.json({ ok: true, ...result });
+});
+
+app.get("/api/images/hero", async (req, res) => {
+  const { destination } = req.query;
+  if (!destination?.trim()) return res.status(400).json({ ok: false, error: "Destination required." });
+
+  const cacheKey = `hero:${destination.toLowerCase()}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return res.json({ ok: true, url: cached, fromCache: true });
+
+  const url = await getDestinationHeroImage(destination);
+  cache.set(cacheKey, url, 3600);
+  res.json({ ok: true, url });
+});
+
+/* ──────────────────────────────────────────────
+   SRM UNIVERSITY INTELLIGENCE
+   Fuzzy search over campus dataset
+   ────────────────────────────────────────────── */
+app.post("/api/srm/places", (req, res) => {
+  const { query, type, limit = 10 } = req.body || {};
+  const results = searchSRMPlaces(query || "", { type, limit: Number(limit) });
+  res.json({
+    ok:      true,
+    places:  results,
+    total:   results.length,
+    isSRM:   isSRMQuery(query || ""),
+    dataSource: "SRM Kattankulathur Campus Dataset",
+  });
+});
+
+app.get("/api/srm/places", (_req, res) => {
+  res.json({ ok: true, places: SRM_PLACES, total: SRM_PLACES.length });
 });
 
 /* ──────────────────────────────────────────────
